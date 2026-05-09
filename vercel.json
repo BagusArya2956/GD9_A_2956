@@ -1,6 +1,6 @@
 {
-  "buildCommand": "cd nextjs-dashboard && npm install && npm run build",
-  "installCommand": "cd nextjs-dashboard && npm install",
   "framework": "nextjs",
-  "rootDirectory": "nextjs-dashboard"
+  "rootDirectory": "nextjs-dashboard",
+  "installCommand": "cd nextjs-dashboard && npm install",
+  "buildCommand": "cd nextjs-dashboard && npm run build"
 }
