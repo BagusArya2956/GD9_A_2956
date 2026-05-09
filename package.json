@@ -1,8 +1,0 @@
-{
-  "name": "gd8-a-2956-root",
-  "private": true,
-  "version": "1.0.0",
-  "dependencies": {
-    "next": "15.5.15"
-  }
-}
