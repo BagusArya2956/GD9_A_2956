@@ -7,9 +7,81 @@ import {
   LatestInvoiceRaw,
   Revenue,
 } from './definitions';
+import {
+  customers as placeholderCustomers,
+  invoices as placeholderInvoices,
+  revenue as placeholderRevenue,
+} from './placeholder-data';
 import { formatCurrency } from './utils';
 
-const sql = postgres(process.env.POSTGRES_URL!, { ssl: 'require' });
+const sql = postgres(
+  process.env.POSTGRES_URL_NON_POOLING ?? process.env.POSTGRES_URL!,
+  {
+    ssl: 'require',
+    connect_timeout: 15,
+    max: 1,
+  },
+);
+
+function isDatabaseUnavailable(error: unknown) {
+  const message = String(error);
+  const code =
+    typeof error === 'object' && error && 'code' in error ? error.code : '';
+  return (
+    code === 'ETIMEDOUT' ||
+    code === 'ECONNREFUSED' ||
+    code === 'ENOTFOUND' ||
+    message.includes('ETIMEDOUT') ||
+    message.includes('ECONNREFUSED') ||
+    message.includes('ENOTFOUND') ||
+    message.includes('AggregateError')
+  );
+}
+
+function getFallbackRevenue() {
+  return placeholderRevenue;
+}
+
+function getFallbackLatestInvoices() {
+  return [...placeholderInvoices]
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .slice(0, 5)
+    .map((invoice, index) => {
+      const customer = placeholderCustomers.find(
+        (customer) => customer.id === invoice.customer_id,
+      );
+
+      return {
+        id: `${invoice.customer_id}-${invoice.date}-${index}`,
+        name: customer?.name ?? 'Unknown Customer',
+        image_url: customer?.image_url ?? '/customers/evil-rabbit.png',
+        email: customer?.email ?? 'unknown@example.com',
+        amount: formatCurrency(invoice.amount),
+      };
+    });
+}
+
+function getFallbackCardData() {
+  const numberOfInvoices = placeholderInvoices.length;
+  const numberOfCustomers = placeholderCustomers.length;
+  const totalPaidInvoices = formatCurrency(
+    placeholderInvoices
+      .filter((invoice) => invoice.status === 'paid')
+      .reduce((total, invoice) => total + invoice.amount, 0),
+  );
+  const totalPendingInvoices = formatCurrency(
+    placeholderInvoices
+      .filter((invoice) => invoice.status === 'pending')
+      .reduce((total, invoice) => total + invoice.amount, 0),
+  );
+
+  return {
+    numberOfCustomers,
+    numberOfInvoices,
+    totalPaidInvoices,
+    totalPendingInvoices,
+  };
+}
 
 export async function fetchRevenue() {
   try {
@@ -26,6 +98,9 @@ export async function fetchRevenue() {
     return data;
   } catch (error) {
     console.error('Database Error:', error);
+    if (isDatabaseUnavailable(error)) {
+      return getFallbackRevenue();
+    }
     throw new Error('Failed to fetch revenue data.');
   }
 }
@@ -46,6 +121,9 @@ export async function fetchLatestInvoices() {
     return latestInvoices;
   } catch (error) {
     console.error('Database Error:', error);
+    if (isDatabaseUnavailable(error)) {
+      return getFallbackLatestInvoices();
+    }
     throw new Error('Failed to fetch the latest invoices.');
   }
 }
@@ -81,6 +159,9 @@ export async function fetchCardData() {
     };
   } catch (error) {
     console.error('Database Error:', error);
+    if (isDatabaseUnavailable(error)) {
+      return getFallbackCardData();
+    }
     throw new Error('Failed to fetch card data.');
   }
 }
